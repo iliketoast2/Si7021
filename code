@@ -1,0 +1,44 @@
+from github import Github
+import base64
+import busio
+import time
+from datetime import datetime
+import adafruit_si7021
+from time import sleep
+from busio import I2C
+from board import SCL, SDA
+import  sqlite3  
+
+messzeit = 2 # in Sekunden
+i2c = I2C(SCL, SDA)
+
+sensor = adafruit_si7021.SI7021(i2c)
+g = Github("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")
+repo = g.get_repo("iliketoast98/Si7021")
+
+conn = sqlite3.connect("database.db")
+# Connect to db and creates execution thread
+cur = conn.cursor()
+# Create test database and specify columns
+cur.execute("CREATE TABLE IF NOT EXISTS Messungen_Si7021(Datum STRING, Uhrzeit STRING, Temperatur STRING, Luftfeuchtigkeit STRING)")
+
+while True:
+    print("\nTemperature: ", round(sensor.temperature, 4), "Â°C")
+    print("Humidity: ", round(sensor.relative_humidity, 4), "%")
+    jetzt = datetime.now()
+    datum = jetzt.date()
+    uhrzeit = str(jetzt.time())
+    uhrzeit = uhrzeit[:5]
+    temperatur = round(sensor.temperature, 4)
+    luftfeuchtigkeit = round(sensor.relative_humidity, 4)
+    cur.execute("INSERT INTO Messungen_Si7021 (Datum, Uhrzeit, Temperatur, Luftfeuchtigkeit) VALUES (?,?,?,?)", (str(datum), str(uhrzeit), (str(temperatur) + "Â°C"), (str(luftfeuchtigkeit)+ "%")))
+    conn.commit()
+    try:
+        with open("/home/khanhhoang/Desktop/si7021/database.db", "rb") as file:
+            dataroh = file.read()
+            data = base64.b64encode(dataroh).decode("utf-8")
+        inhalt = repo.get_contents("Datenbank")
+        repo.update_file("Datenbank", "upload database", data, sha=inhalt.sha)    
+    except Exception as e:
+        print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
+    sleep(messzeit)
